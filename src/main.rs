@@ -1,22 +1,28 @@
 use std::num::NonZeroU32;
-use pangocairo::cairo;
+
 use pangocairo::cairo::Format;
+use pangocairo::cairo;
+use pangocairo::functions::{create_context, show_layout};
+use pangocairo::pango;
 use winit::dpi::PhysicalSize;
-use winit::event_loop::{ControlFlow, EventLoopBuilder};
+use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
 fn main() {
-    let event_loop = EventLoopBuilder::<()>::with_user_event().build();
+    let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
     let context = unsafe { softbuffer::Context::new(&window) }.unwrap();
     let mut surface = unsafe { softbuffer::Surface::new(&context, &window) }.unwrap();
 
+    let mut clicks = 0;
     let mut size = PhysicalSize::default();
 
     event_loop.run(move |event, _, control_flow| {
         use winit::event::Event::*;
         use winit::event::WindowEvent::CloseRequested;
+        use winit::event::WindowEvent::MouseInput;
+        use winit::event::ElementState::Pressed;
 
         *control_flow = ControlFlow::Wait;
 
@@ -26,9 +32,13 @@ fn main() {
                     *control_flow = ControlFlow::Exit;
                 }
 
-            UserEvent(_) => {
-                window.request_redraw();
-            }
+            WindowEvent { window_id, event: MouseInput { state, .. } }
+                if window_id == window.id() => {
+                    if matches!(state, Pressed) {
+                        clicks += 1;
+                    }
+                    window.request_redraw();
+                }
 
             RedrawRequested(window_id)
                 if window_id == window.id() => {
@@ -58,19 +68,27 @@ fn main() {
                         )
                     }.unwrap();
 
-                    let mut cr = cairo::Context::new(&image_surface).unwrap();
-                    // todo: draw over cr
+                    { // Actual rendering
+                        let mut cr = cairo::Context::new(&image_surface).unwrap();
+                        cr.save().unwrap();
+                        cr.set_source_rgb(1.0, 1.0, 1.0);
+                        cr.fill().unwrap();
+                        cr.paint().unwrap();
+                        cr.restore().unwrap();
+
+                        cr.set_source_rgb(0.0, 0.0, 0.0);
+                        cr.save().unwrap();
+                        let pango_context = create_context(&cr);
+                        cr.move_to(50.0, 50.0);
+                        let pango_layout = pango::Layout::new(&pango_context);
+                        let s = format!("clicks so far: {}", clicks);
+                        pango_layout.set_text(&s);
+                        show_layout(&cr, &pango_layout);
+                        cr.restore().unwrap();
+                    }
+
                     buffer.present().unwrap();
                 }
-
-            // NewEvents(_) => {}
-            // WindowEvent { window_id: _, event: _ } => {}
-            // Suspended => {}
-            // Resumed => {}
-            // MainEventsCleared => {}
-            // RedrawRequested(_) => {}
-            // RedrawEventsCleared => {}
-            // LoopDestroyed => {}
             _ => ()
         }
     });
