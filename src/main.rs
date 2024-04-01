@@ -5,31 +5,30 @@ use pangocairo::cairo;
 use pangocairo::functions::{create_context, show_layout};
 use pangocairo::pango;
 use winit::dpi::PhysicalSize;
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::event_loop::EventLoop;
 use winit::window::WindowBuilder;
 
 fn main() {
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    let context = unsafe { softbuffer::Context::new(&window) }.unwrap();
-    let mut surface = unsafe { softbuffer::Surface::new(&context, &window) }.unwrap();
+    let context = softbuffer::Context::new(&window).unwrap();
+    let mut surface = softbuffer::Surface::new(&context, &window).unwrap();
 
     let mut clicks = 0;
     let mut size = PhysicalSize::default();
 
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run(|event, event_loop| {
         use winit::event::Event::*;
         use winit::event::WindowEvent::CloseRequested;
         use winit::event::WindowEvent::MouseInput;
+        use winit::event::WindowEvent::RedrawRequested;
         use winit::event::ElementState::Pressed;
-
-        *control_flow = ControlFlow::Wait;
 
         match event {
             WindowEvent { window_id, event: CloseRequested }
                 if window_id == window.id() => {
-                    *control_flow = ControlFlow::Exit;
+                    event_loop.exit();
                 }
 
             WindowEvent { window_id, event: MouseInput { state, .. } }
@@ -40,7 +39,7 @@ fn main() {
                     window.request_redraw();
                 }
 
-            RedrawRequested(window_id)
+            WindowEvent { window_id, event: RedrawRequested }
                 if window_id == window.id() => {
                     let window_size = window.inner_size();
                     let PhysicalSize { width, height } = window_size;
@@ -89,8 +88,9 @@ fn main() {
 
                     buffer.present().unwrap();
                 }
+
             _ => ()
         }
-    });
+    }).unwrap();
 }
 
